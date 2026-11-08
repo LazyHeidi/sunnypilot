@@ -141,7 +141,6 @@ class CruiseLayout(Widget):
         self.custom_acc_toggle.action_item.set_enabled(((has_long and not ui_state.CP.pcmCruise) or has_icbm) and ui_state.is_offroad())
         self.dec_toggle.action_item.set_enabled(has_long)
         self.scc_v_toggle.action_item.set_enabled(True)
-        self.scc_m_toggle.action_item.set_enabled(True)
       else:
         ui_state.params.remove("CustomAccIncrementsEnabled")
         ui_state.params.remove("DynamicExperimentalControl")
@@ -150,7 +149,6 @@ class CruiseLayout(Widget):
         self.custom_acc_toggle.action_item.set_enabled(False)
         self.dec_toggle.action_item.set_enabled(False)
         self.scc_v_toggle.action_item.set_enabled(False)
-        self.scc_m_toggle.action_item.set_enabled(False)
 
     else:
       has_icbm = has_long = False
