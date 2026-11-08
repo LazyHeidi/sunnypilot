@@ -28,6 +28,16 @@ function agnos_init {
   fi
 }
 
+function disable_persistent_journald {
+  sudo journalctl --rotate >/dev/null 2>&1
+  sudo journalctl --vacuum-size=0 >/dev/null 2>&1
+  sudo mkdir -p /etc/systemd/journald.conf.d
+  printf '[Journal]\nStorage=none\n' | sudo tee /etc/systemd/journald.conf.d/50-no-persistent-logs.conf >/dev/null
+  sudo systemctl restart systemd-journald
+  sudo journalctl --rotate >/dev/null 2>&1
+  sudo journalctl --vacuum-size=0 >/dev/null 2>&1
+}
+
 function launch {
   # Remove orphaned git lock if it exists on boot
   [ -f "$DIR/.git/index.lock" ] && rm -f $DIR/.git/index.lock
@@ -75,8 +85,8 @@ function launch {
     agnos_init
   fi
 
-  # write tmux scrollback to a file
-  tmux capture-pane -pq -S-1000 > /tmp/launch_log
+  disable_persistent_journald
+  ulimit -c 0
 
   # start manager
   cd $DIR/system/manager

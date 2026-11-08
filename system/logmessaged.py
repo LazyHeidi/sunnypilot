@@ -3,16 +3,10 @@ import zmq
 from typing import NoReturn
 
 import cereal.messaging as messaging
-from openpilot.common.logging_extra import SwagLogFileFormatter
 from openpilot.system.hardware.hw import Paths
-from openpilot.common.swaglog import get_file_handler
 
 
 def main() -> NoReturn:
-  log_handler = get_file_handler()
-  log_handler.setFormatter(SwagLogFileFormatter(None))
-  log_level = 20  # logging.INFO
-
   ctx = zmq.Context.instance()
   sock = ctx.socket(zmq.PULL)
   sock.bind(Paths.swaglog_ipc())
@@ -26,8 +20,6 @@ def main() -> NoReturn:
       dat = b''.join(sock.recv_multipart())
       level = dat[0]
       record = dat[1:].decode("utf-8")
-      if level >= log_level:
-        log_handler.emit(record)
 
       if len(record) > 2*1024*1024:
         print("WARNING: log too big to publish", len(record))
@@ -44,12 +36,6 @@ def main() -> NoReturn:
   finally:
     sock.close()
     ctx.term()
-
-    # can hit this if interrupted during a rollover
-    try:
-      log_handler.close()
-    except ValueError:
-      pass
 
 if __name__ == "__main__":
   main()

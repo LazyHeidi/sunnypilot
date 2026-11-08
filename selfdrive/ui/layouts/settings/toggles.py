@@ -76,18 +76,6 @@ class TogglesLayout(Widget):
         "monitoring.png",
         False,
       ),
-      "RecordFront": (
-        lambda: tr("Record and Upload Driver Camera"),
-        DESCRIPTIONS["RecordFront"],
-        "monitoring.png",
-        True,
-      ),
-      "RecordAudio": (
-        lambda: tr("Record and Upload Microphone Audio"),
-        DESCRIPTIONS["RecordAudio"],
-        "microphone.png",
-        True,
-      ),
       "IsMetric": (
         lambda: tr("Use Metric System"),
         DESCRIPTIONS["IsMetric"],

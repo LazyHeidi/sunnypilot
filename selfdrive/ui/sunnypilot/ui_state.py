@@ -59,10 +59,7 @@ class UIStateSP:
     self._sp_initialized: bool = False
 
   def update(self) -> None:
-    if self.sunnylink_enabled:
-      self.sunnylink_state.start()
-    else:
-      self.sunnylink_state.stop()
+    self.sunnylink_state.stop()
 
   def onroad_brightness_handle_alerts(self, _ui_state, alert):
     if _ui_state.sm.recv_frame["carState"] < _ui_state.started_frame:

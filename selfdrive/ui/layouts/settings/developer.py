@@ -97,7 +97,6 @@ class DeveloperLayout(Widget):
     self._scroller = Scroller([
       self._adb_toggle,
       self._ssh_toggle,
-      self._ssh_keys,
       self._joystick_toggle,
       self._long_maneuver_toggle,
       self._lat_maneuver_toggle,

@@ -100,6 +100,7 @@ class DeviceLayoutSP(DeviceLayout):
       right_text=lambda: tr("Reset Settings"),
       right_callback=self._reset_settings
     )
+    self._onroad_uploads_and_reset_settings.action_item.left_button.set_visible(False)
 
     self._power_buttons = dual_button_item_sp(
       left_text=lambda: tr("Reboot"),
@@ -112,8 +113,6 @@ class DeviceLayoutSP(DeviceLayout):
       text_item(lambda: tr("Dongle ID"), self._params.get("DongleId") or (lambda: tr("N/A"))),
       LineSeparator(),
       text_item(lambda: tr("Serial"), self._params.get("HardwareSerial") or (lambda: tr("N/A"))),
-      LineSeparator(),
-      self._pair_device_btn,
       LineSeparator(),
       self._reset_calib_btn,
       LineSeparator(),

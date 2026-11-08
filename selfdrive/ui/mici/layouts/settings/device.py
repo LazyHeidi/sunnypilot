@@ -340,8 +340,6 @@ class DeviceLayoutMici(NavScroller):
 
     self._scroller.add_widgets([
       DeviceInfoLayoutMici(),
-      UpdateOpenpilotBigButton(),
-      PairBigButton(),
       review_training_guide_btn,
       driver_cam_btn,
       terms_btn,

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import datetime
 import os
+import shutil
 import signal
 import sys
 import time
@@ -13,11 +14,11 @@ from openpilot.common.utils import atomic_write
 from openpilot.common.params import Params, ParamKeyFlag
 from openpilot.common.text_window import TextWindow
 from openpilot.system.hardware import HARDWARE
-from openpilot.system.manager.helpers import unblock_stdout, write_onroad_params, save_bootlog
+from openpilot.system.manager.helpers import unblock_stdout, write_onroad_params
 from openpilot.system.manager.process import ensure_running
 from openpilot.system.manager.process_config import managed_processes
-from openpilot.system.athena.registration import register, UNREGISTERED_DONGLE_ID
-from openpilot.common.swaglog import cloudlog, add_file_handler
+from openpilot.system.athena.registration import UNREGISTERED_DONGLE_ID
+from openpilot.common.swaglog import cloudlog
 from openpilot.system.version import get_build_metadata
 from openpilot.system.hardware.hw import Paths
 from openpilot.system.hardware import PC
@@ -25,12 +26,86 @@ from openpilot.system.hardware import PC
 from openpilot.sunnypilot.system.params_migration import run_migration
 
 
+def clear_saved_logs() -> None:
+  if PC:
+    return
+
+  paths = [
+    Paths.log_root(),
+    Paths.swaglog_root(),
+    Paths.stats_root(),
+    Paths.stats_sp_root(),
+    Paths.crash_log_root(),
+    "/data/tombstones",
+  ]
+  if os.path.ismount(Paths.log_root_external()):
+    paths.append(Paths.log_root_external())
+
+  try:
+    os.unlink("/tmp/launch_log")
+  except FileNotFoundError:
+    pass
+
+  for path in paths:
+    if not os.path.exists(path):
+      continue
+    try:
+      if os.path.ismount(path):
+        for entry in os.scandir(path):
+          if entry.is_dir(follow_symlinks=False):
+            shutil.rmtree(entry.path)
+          else:
+            os.unlink(entry.path)
+      else:
+        shutil.rmtree(path)
+    except OSError as e:
+      print(f"Failed to clear saved logs from {path}: {e}")
+
+
+def stop_persisted_daemon(params: Params, pid_param: str, module: str) -> None:
+  raw_pid = params.get(pid_param)
+  params.remove(pid_param)
+  if raw_pid is None:
+    return
+
+  try:
+    pid = int(raw_pid)
+    with open(f"/proc/{pid}/cmdline", "rb") as f:
+      cmdline = f.read().replace(b"\0", b" ").decode("utf-8", errors="replace")
+    if module not in cmdline:
+      return
+    os.kill(pid, signal.SIGTERM)
+  except (OSError, ValueError):
+    return
+
+  for _ in range(20):
+    time.sleep(0.1)
+    try:
+      with open(f"/proc/{pid}/cmdline", "rb") as f:
+        cmdline = f.read().replace(b"\0", b" ").decode("utf-8", errors="replace")
+      if module not in cmdline:
+        return
+      os.kill(pid, 0)
+    except (OSError, ValueError):
+      return
+
+  try:
+    with open(f"/proc/{pid}/cmdline", "rb") as f:
+      cmdline = f.read().replace(b"\0", b" ").decode("utf-8", errors="replace")
+    if module in cmdline:
+      os.kill(pid, signal.SIGKILL)
+  except (OSError, ValueError):
+    pass
+
+
 def manager_init() -> None:
-  save_bootlog()
+  clear_saved_logs()
 
   build_metadata = get_build_metadata()
 
   params = Params()
+  stop_persisted_daemon(params, "AthenadPid", "system.athena.manage_athenad")
+  stop_persisted_daemon(params, "SunnylinkdPid", "sunnypilot.sunnylink.athena.manage_sunnylinkd")
   params.clear_all(ParamKeyFlag.CLEAR_ON_MANAGER_START)
   params.clear_all(ParamKeyFlag.CLEAR_ON_ONROAD_TRANSITION)
   params.clear_all(ParamKeyFlag.CLEAR_ON_OFFROAD_TRANSITION)
@@ -50,6 +125,24 @@ def manager_init() -> None:
 
   if params.get_bool("RecordFrontLock"):
     params.put_bool("RecordFront", True, block=True)
+
+  # Disable network-backed features and all persistent recording.
+  params.put_bool("DisableUpdates", True, block=True)
+  params.put_bool("OnroadUploads", False, block=True)
+  params.put_bool("SunnylinkEnabled", False, block=True)
+  params.put_bool("EnableSunnylinkUploader", False, block=True)
+  params.put_bool("RecordFront", False, block=True)
+  params.put_bool("RecordAudio", False, block=True)
+  params.put_bool("RecordAudioFeedback", False, block=True)
+  params.put_bool("UpdateAvailable", False, block=True)
+  params.put_bool("UpdaterFetchAvailable", False, block=True)
+  params.put_bool("RoadNameToggle", False, block=True)
+  params.put_bool("SmartCruiseControlMap", False, block=True)
+  params.put("SpeedLimitPolicy", 0, block=True)  # car_state_only
+  params.remove("Offroad_OSMUpdateRequired")
+  params.remove("CurrentBootlog")
+  params.remove("AthenadUploadQueue")
+  params.remove("AthenadRecentlyViewedRoutes")
 
   if not PC:
     run_migration(params)
@@ -81,12 +174,8 @@ def manager_init() -> None:
   params.put_bool("IsReleaseSpBranch", build_metadata.release_sp_channel, block=True)
   params.put("HardwareSerial", serial, block=True)
 
-  # set dongle id
-  reg_res = register(show_spinner=True)
-  if reg_res:
-    dongle_id = reg_res
-  else:
-    raise Exception(f"Registration failed for device {serial}")
+  # Online device registration is disabled; retain the local unregistered identity.
+  dongle_id = params.get("DongleId") or UNREGISTERED_DONGLE_ID
   os.environ['DONGLE_ID'] = dongle_id  # Needed for swaglog
   os.environ['GIT_ORIGIN'] = build_metadata.openpilot.git_normalized_origin # Needed for swaglog
   os.environ['GIT_BRANCH'] = build_metadata.channel # Needed for swaglog
@@ -130,8 +219,6 @@ def manager_thread() -> None:
   params = Params()
 
   ignore: list[str] = []
-  if params.get("DongleId") in (None, UNREGISTERED_DONGLE_ID):
-    ignore += ["manage_athenad", "uploader"]
   if os.getenv("NOBOARD") is not None:
     ignore.append("pandad")
   ignore += [x for x in os.getenv("BLOCK", "").split(",") if len(x) > 0]
@@ -234,7 +321,6 @@ if __name__ == "__main__":
   except KeyboardInterrupt:
     print("got CTRL-C, exiting")
   except Exception:
-    add_file_handler(cloudlog)
     cloudlog.exception("Manager failed to start")
 
     try:

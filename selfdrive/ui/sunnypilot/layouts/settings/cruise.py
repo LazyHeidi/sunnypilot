@@ -52,10 +52,6 @@ class CruiseLayout(Widget):
       description=tr("Use vision path predictions to estimate the appropriate speed to drive through turns ahead."),
       param="SmartCruiseControlVision")
 
-    self.scc_m_toggle = toggle_item_sp(
-      title=tr("Smart Cruise Control - Map"),
-      description=tr("Use map data to estimate the appropriate speed to drive through turns ahead."),
-      param="SmartCruiseControlMap")
 
     self.custom_acc_toggle = toggle_item_sp(
       title=tr("Custom ACC Speed Increments"),
@@ -91,7 +87,6 @@ class CruiseLayout(Widget):
       self.icbm_toggle,
       self.dec_toggle,
       self.scc_v_toggle,
-      self.scc_m_toggle,
       self.custom_acc_toggle,
       self.custom_acc_short_increment,
       self.custom_acc_long_increment,

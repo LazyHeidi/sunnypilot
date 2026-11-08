@@ -153,6 +153,10 @@ class SoftwareLayout(Widget):
     else:
       self._install_btn.set_visible(False)
 
+    self._download_btn.set_visible(False)
+    self._install_btn.set_visible(False)
+    self._branch_btn.set_visible(False)
+
   def _on_download_update(self):
     # Check if we should start checking or start downloading
     self._download_btn.action_item.set_enabled(False)
