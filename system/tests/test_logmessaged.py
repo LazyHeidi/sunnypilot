@@ -16,7 +16,7 @@ class TestLogmessaged:
 
     managed_processes['logmessaged'].start()
     self.sock = messaging.sub_sock("logMessage", timeout=1000, conflate=False)
-    self.error_sock = messaging.sub_sock("logMessage", timeout=1000, conflate=False)
+    self.error_sock = messaging.sub_sock("errorLogMessage", timeout=1000, conflate=False)
 
     # ensure sockets are connected
     time.sleep(0.5)
@@ -32,15 +32,19 @@ class TestLogmessaged:
     return list(glob.glob(os.path.join(Paths.swaglog_root(), "swaglog.*")))
 
   def test_simple_log(self):
+    log_files_before = set(self._get_log_files())
     msgs = [f"abc {i}" for i in range(10)]
     for m in msgs:
       cloudlog.error(m)
     time.sleep(0.5)
-    m = messaging.drain_sock(self.sock)
-    assert len(m) == len(msgs)
-    assert len(self._get_log_files()) >= 1
+    log_messages = messaging.drain_sock(self.sock)
+    error_messages = messaging.drain_sock(self.error_sock)
+    assert len(log_messages) == len(msgs)
+    assert len(error_messages) == len(msgs)
+    assert set(self._get_log_files()) == log_files_before
 
   def test_big_log(self):
+    log_files_before = set(self._get_log_files())
     n = 10
     msg = "a"*3*1024*1024
     for _ in range(n):
@@ -49,7 +53,5 @@ class TestLogmessaged:
 
     msgs = messaging.drain_sock(self.sock)
     assert len(msgs) == 0
-
-    logsize = sum([os.path.getsize(f) for f in self._get_log_files()])
-    assert (n*len(msg)) < logsize < (n*(len(msg)+1024))
+    assert set(self._get_log_files()) == log_files_before
 
