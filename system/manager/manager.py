@@ -3,6 +3,7 @@ import datetime
 import os
 import shutil
 import signal
+import subprocess
 import sys
 import time
 import traceback
@@ -98,14 +99,36 @@ def stop_persisted_daemon(params: Params, pid_param: str, module: str) -> None:
     pass
 
 
+def stop_github_runner_service() -> None:
+  if PC:
+    return
+
+  service_name = f"actions.runner.sunnypilot.{os.uname().nodename}"
+  try:
+    result = subprocess.run(
+      ["sudo", "-n", "systemctl", "stop", service_name],
+      check=False,
+      stdout=subprocess.DEVNULL,
+      stderr=subprocess.DEVNULL,
+      timeout=10,
+    )
+    if result.returncode not in (0, 5):
+      print(f"Failed to stop GitHub Runner service {service_name}: exit {result.returncode}")
+  except (OSError, subprocess.TimeoutExpired) as e:
+    print(f"Failed to stop GitHub Runner service {service_name}: {e}")
+
+
 def manager_init() -> None:
+  params = Params()
+  # Clear the persistent setting before stopping the service.
+  params.put_bool("EnableGithubRunner", False, block=True)
+  stop_github_runner_service()
+  stop_persisted_daemon(params, "AthenadPid", "system.athena.manage_athenad")
+  stop_persisted_daemon(params, "SunnylinkdPid", "sunnypilot.sunnylink.athena.manage_sunnylinkd")
   clear_saved_logs()
 
   build_metadata = get_build_metadata()
 
-  params = Params()
-  stop_persisted_daemon(params, "AthenadPid", "system.athena.manage_athenad")
-  stop_persisted_daemon(params, "SunnylinkdPid", "sunnypilot.sunnylink.athena.manage_sunnylinkd")
   params.clear_all(ParamKeyFlag.CLEAR_ON_MANAGER_START)
   params.clear_all(ParamKeyFlag.CLEAR_ON_ONROAD_TRANSITION)
   params.clear_all(ParamKeyFlag.CLEAR_ON_OFFROAD_TRANSITION)
